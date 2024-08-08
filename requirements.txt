@@ -1,0 +1,8 @@
+evaluate
+spacy 
+textdescriptives
+bert-score
+#python -m spacy download en_core_web_lg
+absl 
+rouge_score 
+nltk
