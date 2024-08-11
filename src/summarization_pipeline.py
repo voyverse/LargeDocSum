@@ -34,29 +34,33 @@ def pipeline(
     system_prompt_docsummary: str,
     llm_instructions_doc_summary: str,
     reference_summary: str,
-    log: bool = False
+    client : OpenAI  ,  
+    log: bool = False,
 ) -> Dict[str, Any]:
     """
-    Summarization pipeline that includes chunking, embedding, clustering, 
-    generating aggregate summaries, and producing a final document 
-    summary. Also calculates various evaluation metrics.
+    A summarization pipeline that processes a document through chunking, embedding, clustering,
+    summarizing, and evaluating to generate a comprehensive summary.
 
-    Parameters:
-    - chunking_method (str): Method used for chunking the document ('recursive' or 'semantic').
-    - chunking_params (Dict[str, Any]): Parameters required for the chosen chunking method.
-    - embed_model_name (str): Name of the embedding model.
-    - summ_model_name (str): Name of the summarization model.
-    - doc (str): Document to be summarized.
-    - num_clusters (int): Number of clusters to form.
-    - top_k (int): Top k closest chunks to the cluster centroid.
-    - system_prompt_aggregate_summaries (str): System prompt for aggregate summaries. (needs to contain how the doc starts)
-    - system_prompt_docsummary (str): System prompt for the final document summary. (needs to contain how the doc starts)
-    - llm_instructions_doc_summary (str): Instructions for the language model for the final summary.  
-    - reference_summary (str): Reference summary for evaluation.
-    - log (bool): Enable logging if True.
+    Args:
+        chunking_method (str): The method used to chunk the document ('recursive' or 'semantic').
+        chunking_params (Dict[str, Any]): Parameters for the chosen chunking method.
+            If 'recursive', requires 'max_length' and 'overlap'.
+            If 'semantic', requires 'threshold' and 'model'.
+        embed_model_name (str): The name of the model used for embedding the text chunks.
+        summ_model_name (str): The name of the model used for summarization.
+        doc (str): The input document to be summarized.
+        num_clusters (int): The number of clusters to form during clustering.
+        top_k (int): The top k closest chunks to the cluster centroid.
+        system_prompt_aggregate_summaries (str): System prompt used for generating aggregate summaries. requires how the doc starts 
+        system_prompt_docsummary (str): System prompt used for generating the final document summary. requires how the doc starts 
+        llm_instructions_doc_summary (str): Instructions for the final summarization task.
+        reference_summary (str): A reference summary for evaluation purposes.
+        client (OpenAI): An instance of the OpenAI client.
+        log (bool, optional): Whether to log progress. Defaults to False.
 
     Returns:
-    - results (Dict[str, Any]): Dictionary containing the final summary and various evaluation metrics.
+        Dict[str, Any]: Results containing the generated summary and evaluation metrics including ROUGE, BERTScore, and coherence.
+
     """
     client = OpenAI(base_url='http://localhost:11434/v1', api_key="ollama")
 
@@ -187,8 +191,8 @@ if __name__ == "__main__":
     # Parameters for the pipeline
     chunking_method = 'recursive'  # or 'semantic', depending on your requirement
     chunking_params = {
-        'max_length': 200,  # example value
-        'overlap': 20       # example value
+        'max_length': 50,  # example value
+        'overlap': 1       # example value
     }
     embed_model_name = "nomic-embed-text"
     summ_model_name = 'gemma2'
@@ -198,7 +202,7 @@ if __name__ == "__main__":
     system_prompt_docsummary = 'You are an advanced summarization assistant.I will provide you with several summaries of important sections of a long document. Your task is to generate a concise and comprehensive summary of the entire document based on these individual summaries. this is how the documane starts : ' + doc[:300]
     llm_instructions_doc_summary = 'Provide a coherent abstractive summary based on the provided parts.'
     reference_summary = 'ted talk about malaria'  
-
+    client = OpenAI(base_url='http://localhost:11434/v1', api_key="ollama")
     # Run the pipeline
     output = pipeline(
         chunking_method=chunking_method,
@@ -212,7 +216,8 @@ if __name__ == "__main__":
         system_prompt_docsummary=system_prompt_docsummary,
         llm_instructions_doc_summary=llm_instructions_doc_summary,
         reference_summary=reference_summary,
-        log=True  # Enable logging
+        client = client ,
+        log=False  # Enable logging
     )
 
     # Print the output
