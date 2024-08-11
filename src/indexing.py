@@ -2,14 +2,15 @@ import ollama
 from tqdm import tqdm
 import time
 import numpy as np 
-from typing import List, Tuple, Union , Any , DIct 
+from typing import List, Tuple, Union , Any , Dict 
 import time
 
 def get_embedding_with_retry_ollama(
     model: Any, 
     prompt: str, 
     max_retries: int = 5, 
-    initial_delay: int = 1
+    initial_delay: int = 1,
+    prefix = 'clustering : '
     ) -> List[float]:
     """
     Attempts to get an embedding from the Ollama model with retry capability on failure.
@@ -28,7 +29,7 @@ def get_embedding_with_retry_ollama(
     """
     retries = 0
     delay = initial_delay
-    prefix = "clustering : "
+
     while retries < max_retries:
         try:
             response = ollama.embeddings(model=model, prompt=prefix + prompt)
@@ -113,7 +114,7 @@ def get_embeddings_for_sentences(model: Any, sentences: List[str]) -> List[Dict[
     data = []
     for sentence in tqdm(sentences, desc="Generating embeddings"):
         try:
-            embedding = get_embedding_with_retry_ollama(model, sentence)
+            embedding = get_embedding_with_retry_ollama(model, sentence , prefix = 'classification : ')
             data.append({"sentence": sentence, "embedding": embedding})
         except ollama.ResponseError as e:
             print(f"Failed to generate embedding for sentence: {sentence}. Error: {e}")
@@ -172,3 +173,21 @@ def semantic_chunking(sentences: List[str], model: Any, threshold: float) -> Lis
         chunks.append(data[i]["sentence"])
 
     return chunks
+
+
+
+def create_vbd(chunks , emb_model ) : 
+    vdb = []
+    i = 0 
+    for  chunk in tqdm(chunks , desc="embedding chunks...") :
+        emb = np.array(get_embedding_with_retry_ollama(model=emb_model , prompt = chunk )) #embeddings
+        if not emb.shape == (0,) : 
+            dp = {
+                "pos" : i , #chronological position of the chunk 
+                "chunk" : chunk , # the chunk itself 
+                "embedding" : emb
+            }
+            i+=1
+            vdb.append(dp)
+    
+    return vdb
