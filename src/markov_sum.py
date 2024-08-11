@@ -70,51 +70,57 @@ def create_directed_graph(
 
 
 
+import math
+import networkx as nx
+
+def add_transformed_weights(graph, weight_attribute='probability', transformed_attribute='weight'):
+    """
+    Add transformed weights to the graph edges by taking negative logarithm of the given probability weights.
+
+    Parameters:
+    graph (networkx.Graph): The input graph with probability weights.
+    weight_attribute (str): The edge attribute name for the probability weights.
+    transformed_attribute (str): The edge attribute name for the transformed weights.
+    """
+    for u, v, data in graph.edges(data=True):
+        prob = data.get(weight_attribute, 1)
+        if prob > 0:
+            data[transformed_attribute] = -math.log(prob)
+        else:
+            data[transformed_attribute] = float('inf')  # Handle zero probability edges
 
 def most_probable_path(graph, start, end):
-    n = len(graph.nodes)
-    
-    node_to_index = {node: i for i, node in enumerate(graph.nodes)}
-    index_to_node = {i: node for node, i in node_to_index.items()}
-    
-    dp = [[float('inf')] * n for _ in range(1 << n)]
-    parent = [[-1] * n for _ in range(1 << n)]
-    
-    dp[1 << node_to_index[start]][node_to_index[start]] = 0
-    
-    for mask in range(1 << n):
-        for u in range(n):
-            if mask & (1 << u):
-                for v in range(n):
-                    if not mask & (1 << v) and graph.has_edge(index_to_node[u], index_to_node[v]):
-                        new_mask = mask | (1 << v)
-                        weight = graph[index_to_node[u]][index_to_node[v]].get('weight', 1)
-                        if dp[mask][u] + weight < dp[new_mask][v]:
-                            dp[new_mask][v] = dp[mask][u] + weight
-                            parent[new_mask][v] = u
-    
-    full_mask = (1 << n) - 1
-    u = node_to_index[end]
-    min_cost = float('inf')
-    end_node = -1
+    """
+    Finds the most probable path from the start node to the end node in a graph where edges represent probabilities.
 
-    for i in range(n):
-        if dp[full_mask][i] < min_cost and graph.has_edge(index_to_node[i], end):
-            min_cost = dp[full_mask][i]
-            end_node = i
+    Parameters:
+    graph (networkx.Graph): The input graph with nodes and edges representing probabilities of transitions.
+    start (hashable): The starting node.
+    end (hashable): The ending node.
 
-    if end_node == -1:
+    Returns:
+    list: The most probable path from start to end node passing through all nodes, as a list of nodes. 
+          The list will be empty if such a path does not exist.
+    """
+    add_transformed_weights(graph)
+
+    try:
+        # Compute the shortest path using the negative logarithm of the probabilities as weights
+        path = nx.shortest_path(graph, source=start, target=end, weight='weight')
+        return path
+    except nx.NetworkXNoPath:
+        # If no path is found, return an empty list
         return []
 
-    path = [end]
-    mask = full_mask
-    u = end_node
-
-    while u != -1:
-        path.append(index_to_node[u])
-        next_u = parent[mask][u]
-        mask ^= (1 << u)
-        u = next_u
-
-    path.reverse()
-    return path
+# Example Usage
+if __name__ == "__main__":
+    graph = nx.DiGraph()
+    graph.add_edge('A', 'B', probability=0.9)
+    graph.add_edge('B', 'C', probability=0.8)
+    graph.add_edge('A', 'C', probability=0.6)
+    graph.add_edge('C', 'A', probability=0.7)
+    graph.add_edge('C', 'D', probability=0.5)
+    start_node = 'A'
+    end_node = 'D'
+    path = most_probable_path(graph, start_node, end_node)
+    print(f"Most probable path: {path}")
