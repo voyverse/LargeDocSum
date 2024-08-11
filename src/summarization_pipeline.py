@@ -1,17 +1,27 @@
 from typing import Dict, List, Any, Union
 import logging
 import pandas as pd
+import sys
+import os
+# Add the parent directory to the Python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
 
-CHUNKING_METHODS = ["recursive", "semantic"]
 from src.indexing import *
 from src.cluster import *
 from src.markov_sum import *
 from src.evaluation.metrics import *
 from openai import OpenAI
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
+
+
+
+
+
+CHUNKING_METHODS = ["recursive", "semantic"]
 def pipeline(
     chunking_method: str,
     chunking_params: Dict[str, Any],
@@ -32,7 +42,17 @@ def pipeline(
     summary. Also calculates various evaluation metrics.
 
     Parameters:
-    - (same as before)...
+    - chunking_method (str): Method used for chunking the document ('recursive' or 'semantic').
+    - chunking_params (Dict[str, Any]): Parameters required for the chosen chunking method.
+    - embed_model_name (str): Name of the embedding model.
+    - summ_model_name (str): Name of the summarization model.
+    - doc (str): Document to be summarized.
+    - num_clusters (int): Number of clusters to form.
+    - top_k (int): Top k closest chunks to the cluster centroid.
+    - system_prompt_aggregate_summaries (str): System prompt for aggregate summaries. (needs to contain how the doc starts)
+    - system_prompt_docsummary (str): System prompt for the final document summary. (needs to contain how the doc starts)
+    - llm_instructions_doc_summary (str): Instructions for the language model for the final summary.  
+    - reference_summary (str): Reference summary for evaluation.
     - log (bool): Enable logging if True.
 
     Returns:
@@ -95,7 +115,7 @@ def pipeline(
     # Aggregate summaries for each cluster
     cluster_summaries = aggregate_summaries_for_each_cluster(
         closest_chunks,
-        sys_prompt_content=system_prompt_aggregate_summaries,
+        sys_prompt_content=system_prompt_aggregate_summaries, #has parameter called start -> how the document starts 
         model=summ_model_name,
         client=client
     )
@@ -113,14 +133,15 @@ def pipeline(
     last_node = cluster_summaries[clustered_chunks[-1]["cluster"]]
     path = most_probable_path(graph, first_node, last_node)
     if log:
-        logging.info("Most probable path identified")
+        logging.info("Most probable path identified -> path : {path}")
 
     # Prepare messages for the final summary call
     messages = [{'role': 'system', 'content': system_prompt_docsummary}]
     for summary in path:
         messages.append({'role': 'user', 'content': summary})
     messages.append({"role": "user", 'content': llm_instructions_doc_summary})
-
+    if log : 
+        print(f"messages for generating the final summary are  : \n{messages}")
     # Generate the final summary
     overall_summary = get_completion_response(messages, client=client, model=summ_model_name)
     if log:
@@ -156,3 +177,46 @@ def pipeline(
 
 
 
+
+if __name__ == "__main__":
+    # Read the document
+    file_path = r"data\ted_talk_1.txt"
+    with open(file_path, 'r', encoding='utf-8') as file:
+        doc = file.read()
+
+    # Parameters for the pipeline
+    chunking_method = 'recursive'  # or 'semantic', depending on your requirement
+    chunking_params = {
+        'max_length': 200,  # example value
+        'overlap': 20       # example value
+    }
+    embed_model_name = "nomic-embed-text"
+    summ_model_name = 'gemma2'
+    num_clusters = 3  # example value
+    top_k = 2  # example value
+    system_prompt_aggregate_summaries = "You are an AI assistant designed to summarize text. To give you some context , the document starts this way  : " + doc[:300]
+    system_prompt_docsummary = 'You are an advanced summarization assistant.I will provide you with several summaries of important sections of a long document. Your task is to generate a concise and comprehensive summary of the entire document based on these individual summaries. this is how the documane starts : ' + doc[:300]
+    llm_instructions_doc_summary = 'Provide a coherent abstractive summary based on the provided parts.'
+    reference_summary = 'ted talk about malaria'  
+
+    # Run the pipeline
+    output = pipeline(
+        chunking_method=chunking_method,
+        chunking_params=chunking_params,
+        embed_model_name=embed_model_name,
+        summ_model_name=summ_model_name,
+        doc=doc,
+        num_clusters=num_clusters,
+        top_k=top_k,
+        system_prompt_aggregate_summaries=system_prompt_aggregate_summaries,
+        system_prompt_docsummary=system_prompt_docsummary,
+        llm_instructions_doc_summary=llm_instructions_doc_summary,
+        reference_summary=reference_summary,
+        log=True  # Enable logging
+    )
+
+    # Print the output
+    print("Summary:", output['summary'])
+    print("ROUGE Scores:", output['rouge'])
+    print("BERTScore:", output['bertscore'])
+    print("Coherence Scores:", output['coherence'])

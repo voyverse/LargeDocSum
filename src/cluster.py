@@ -161,8 +161,8 @@ def aggregate_summaries_for_each_cluster(
         summary = get_completion_response(messages, client, model)
         try:
             summary_text = summary["summary"]
-        except KeyError as e:
-            logging.error(f"Key error occurred: {summary}")
+        except Exception as e:
+            logging.error(f"error occurred in aggragate_summary_for_each_cluster: {e}")
             summary_text = str(summary)
 
         cluster_summaries[cluster_index] = summary_text

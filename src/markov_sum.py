@@ -71,59 +71,44 @@ def create_directed_graph(
 
 
 
-def most_probable_path(graph: nx.DiGraph, start: str, end: str) -> List[str]:
-    """
-    Finds the most probable path in a weighted, directed graph from start node to end node using dynamic programming.
-    The weights of the edges represent the transition probabilities.
-
-    Args:
-        graph (nx.DiGraph): A directed graph where edges have weights representing transition probabilities.
-        start (str): The starting node of the path.
-        end (str): The ending node of the path.
-
-    Returns:
-        List[str]: The most probable path from start to end. If no path is found, returns an empty list.
-    """
+def most_probable_path(graph, start, end):
     n = len(graph.nodes)
-    nodes = list(graph.nodes)
-
-    # Map nodes to indices and vice versa
-    node_to_index = {node: i for i, node in enumerate(nodes)}
+    
+    node_to_index = {node: i for i, node in enumerate(graph.nodes)}
     index_to_node = {i: node for node, i in node_to_index.items()}
-
-    # Initialize dynamic programming table and parent tracking
-    dp = [[-np.inf] * n for _ in range(1 << n)]
+    
+    dp = [[float('inf')] * n for _ in range(1 << n)]
     parent = [[-1] * n for _ in range(1 << n)]
-
+    
     dp[1 << node_to_index[start]][node_to_index[start]] = 0
-
+    
     for mask in range(1 << n):
         for u in range(n):
             if mask & (1 << u):
                 for v in range(n):
                     if not mask & (1 << v) and graph.has_edge(index_to_node[u], index_to_node[v]):
                         new_mask = mask | (1 << v)
-                        weight = np.log(graph[index_to_node[u]][index_to_node[v]].get('weight', 1))
-                        if dp[mask][u] + weight > dp[new_mask][v]:
+                        weight = graph[index_to_node[u]][index_to_node[v]].get('weight', 1)
+                        if dp[mask][u] + weight < dp[new_mask][v]:
                             dp[new_mask][v] = dp[mask][u] + weight
                             parent[new_mask][v] = u
-
+    
     full_mask = (1 << n) - 1
-    end_index = node_to_index[end]
-    max_prob = -np.inf
-    final_node = -1
+    u = node_to_index[end]
+    min_cost = float('inf')
+    end_node = -1
 
     for i in range(n):
-        if dp[full_mask][i] > max_prob and graph.has_edge(index_to_node[i], end):
-            max_prob = dp[full_mask][i]
-            final_node = i
+        if dp[full_mask][i] < min_cost and graph.has_edge(index_to_node[i], end):
+            min_cost = dp[full_mask][i]
+            end_node = i
 
-    if final_node == -1:
+    if end_node == -1:
         return []
 
     path = [end]
     mask = full_mask
-    u = final_node
+    u = end_node
 
     while u != -1:
         path.append(index_to_node[u])
@@ -133,5 +118,3 @@ def most_probable_path(graph: nx.DiGraph, start: str, end: str) -> List[str]:
 
     path.reverse()
     return path
-
-
