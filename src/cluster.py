@@ -4,6 +4,8 @@ from sklearn.cluster import KMeans
 from openai import OpenAI
 import json
 import logging
+from typing import Dict, List
+from src.llm.llm import CollectionLLM
 
 def cluster_chunks_kmeans(
     vdb: List[Dict[str, Any]], 
@@ -96,39 +98,6 @@ def find_closest_data_points_to_centroid(
 
 
 
-
-
-
-def get_completion_response(
-    messages: List[Dict[str, str]], 
-    client: Any, model: str
-) -> Union[Dict[str, Any], str]:
-    """
-    Generates a response from an AI model based on the input messages.
-
-    Args:
-        messages (List[Dict[str, str]]): A list of message dictionaries containing:
-            - "role" (str): The role of the message sender, e.g., "system", "user".
-            - "content" (str): The content of the message.
-        client (Any): The AI client used to generate the response.
-        model (str): The AI model to use for generating the response.
-
-    Returns:
-        Union[Dict[str, Any], str]: The parsed JSON response if successful, otherwise the raw response content.
-    """
-    response = client.chat.completions.create(
-        messages=messages,
-        model=model,
-        temperature=0,
-    )
-    try:
-        return json.loads(response.choices[0].message.content)
-    except Exception as e:
-        logging.error(f"Error occurred in json.loads: {e}, with output being {response.choices[0].message.content}")
-        return response.choices[0].message.content
-
-from typing import Dict, List
-
 def aggregate_summaries_for_each_cluster(
     closest_chunks: Dict[int, List[str]], 
     sys_prompt_content: str , 
@@ -145,6 +114,10 @@ def aggregate_summaries_for_each_cluster(
     Returns:
         Dict[int, str]: A dictionary where each key is a cluster index and the value is the summarized text for that cluster.
     """
+    try : 
+        llm = CollectionLLM.llm_collection[model]
+    except Exception as e : 
+        logging.error(f"model {model} is not included into our llm collection. {e}")
     aggregated_messages = [{"role": "system", "content": sys_prompt_content}]
     cluster_summaries = {}
 
@@ -158,7 +131,7 @@ def aggregate_summaries_for_each_cluster(
             f"the main ideas. The sentences are:\n - {chunks}\nYou answer in this format {format}, you only output the needed format no more no less please."
         )
         messages = aggregated_messages + [{"role": "user", "content": prompt}]
-        summary = get_completion_response(messages, client, model)
+        summary = preprocess_llm_response(llm.get_response(messages=messages))
         try:
             summary_text = summary["summary"]
         except Exception as e:
@@ -169,3 +142,28 @@ def aggregate_summaries_for_each_cluster(
         aggregated_messages.append({"role": "assistant", "content": summary_text})
 
     return cluster_summaries
+
+def preprocess_llm_response(llm_message: str) -> Dict[str, Union[str, Dict]]:
+    """
+    Preprocess the function calling message to remove any unwanted strings,
+    ensuring only the JSON part remains for parsing.
+
+    Args:
+        function_calling_message (str): The raw message containing the function call.
+
+    Returns:
+        Dict[str, Union[str, Dict]]: The cleaned dictionary representing the function call, or an empty dict if parsing fails.
+    """
+    start_idx = llm_message.find('{')
+    end_idx = llm_message.rfind('}')
+    llm_message = llm_message.replace("'" , '"')
+    try : 
+        if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+            json_str = llm_message[start_idx:end_idx + 1]
+            func_call = json.loads(json_str)
+            return func_call
+    except Exception as e : 
+        logging.error(f"Error occured in preprocess_llm_response : {e}")
+        print(f"llm response : {llm_message}")
+        return llm_message
+

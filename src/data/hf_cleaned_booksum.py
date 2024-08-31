@@ -24,11 +24,11 @@ if __name__=="__main__" :
     data_loader = DataLoader()
     print("Number of book-summary couples:", data_loader.get_number_of_books())
 
-    # index_to_fetch = 0
+    index_to_fetch = 0
 
-    # try:
-    #     book_summary_couple = data_loader.get_book_summary_couple(index_to_fetch)
-    #     print("\n1st Book Text:\n", book_summary_couple["book"])
-    #     print("\n1st Book Summary:\n", book_summary_couple["summary"])
-    # except IndexError as ie:
-    #     print(ie)
+    try:
+        book_summary_couple = data_loader.get_book_summary_couple(index_to_fetch)
+        print("\n1st Book Text:\n", book_summary_couple["book"])
+        print("\n1st Book Summary:\n", book_summary_couple["summary"])
+    except IndexError as ie:
+        print(ie)

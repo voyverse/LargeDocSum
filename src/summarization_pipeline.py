@@ -3,7 +3,6 @@ import logging
 import pandas as pd
 import sys
 import os
-# Add the parent directory to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
@@ -13,8 +12,6 @@ from src.cluster import *
 from src.markov_sum import *
 from src.evaluation.metrics import *
 from openai import OpenAI
-from itertools import product
-from typing import List, Dict, Any
 
 
 
@@ -64,7 +61,7 @@ def pipeline(
         Dict[str, Any]: Results containing the generated summary and evaluation metrics including ROUGE, BERTScore, and coherence.
 
     """
-    
+    client = OpenAI(base_url='http://localhost:11434/v1', api_key="ollama")
 
     if log:
         logging.info("Pipeline started")
@@ -137,9 +134,9 @@ def pipeline(
     # Determine the most probable path
     first_node = cluster_summaries[clustered_chunks[0]["cluster"]]
     last_node = cluster_summaries[clustered_chunks[-1]["cluster"]]
-    path = most_probable_path(graph, first_node, last_node)
+    path = find_path(graph, first_node, last_node)
     if log:
-        logging.info("Most probable path identified -> path : {path}")
+        print(f"Most probable path identified -> path : {path}")
 
     # Prepare messages for the final summary call
     messages = [{'role': 'system', 'content': system_prompt_docsummary}]
@@ -149,7 +146,8 @@ def pipeline(
     if log : 
         print(f"messages for generating the final summary are  : \n{messages}")
     # Generate the final summary
-    overall_summary = get_completion_response(messages, client=client, model=summ_model_name)
+    llm = CollectionLLM.llm_collection[summ_model_name]
+    overall_summary = llm.get_response(messages)
     if log:
         logging.info("Final document summary generated")
 
@@ -182,45 +180,6 @@ def pipeline(
     return results
 
 
-def generate_parameter_grid() -> List[Dict[str, Any]]:
-    chunking_methods = ['recursive', 'semantic']
-
-    # Chunking parameters could vary significantly based on the method
-    chunking_params_recursive = [
-        {'max_length': 256, 'overlap': 50},
-        {'max_length': 512, 'overlap': 100},
-        {'max_length': 1024, 'overlap': 200},
-    ]
-    chunking_params_semantic = [
-        {'threshold': 0.3, 'model': 'nomic-embed-text'},
-        {'threshold': 0.5, 'model': 'mxbai-embed-large'},
-    ]
-
-    # Embedding models to test
-    embed_model_names = ['embed_model_1', 'embed_model_2']
-
-    # Summarization models to test
-    summ_model_names = ['summ_model_1', 'summ_model_2']
-
-    # Number of clusters to form during clustering
-    num_clusters_options = [3, 5, 7]
-
-    parameter_grid = []
-
-    for chunking_method in chunking_methods:
-        chunking_params_list = chunking_params_recursive if chunking_method == 'recursive' else chunking_params_semantic
-
-        for combo in product(chunking_params_list, embed_model_names, summ_model_names, num_clusters_options):
-            chunking_params, embed_model_name, summ_model_name, num_clusters = combo
-            parameter_grid.append({
-                'chunking_method': chunking_method,
-                'chunking_params': chunking_params,
-                'embed_model_name': embed_model_name,
-                'summ_model_name': summ_model_name,
-                'num_clusters': num_clusters,
-            })
-
-    return parameter_grid
 
 
 if __name__ == "__main__":
@@ -236,7 +195,7 @@ if __name__ == "__main__":
         'overlap': 1       # example value
     }
     embed_model_name = "nomic-embed-text"
-    summ_model_name = 'gemma2'
+    summ_model_name = "gpt-4o-mini"
     num_clusters = 3  # example value
     top_k = 2  # example value
     system_prompt_aggregate_summaries = "You are an AI assistant designed to summarize text. To give you some context , the document starts this way  : " + doc[:300]

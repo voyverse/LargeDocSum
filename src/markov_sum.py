@@ -5,7 +5,7 @@ import networkx as nx
 
 def create_transition_matrix(
     processed_data: List[Dict[str, Any]], 
-    n_clusters: int
+    n_clusters: int , 
 ) -> np.ndarray:
     """
     Creates a transition matrix based on the transitions between clusters.
@@ -39,10 +39,37 @@ def create_transition_matrix(
     return transition_matrix
 
 
+import networkx as nx
+import matplotlib.pyplot as plt
+
+def plot_networkx_graph(G: nx.Graph, title: str = "NetworkX Graph", node_size: int = 300, font_size: int = 10) -> None:
+    """
+    Plots a NetworkX graph using Matplotlib.
+
+    Args:
+        G (nx.Graph): The NetworkX graph to plot.
+        title (str, optional): Title of the graph plot. Defaults to "NetworkX Graph".
+        node_size (int, optional): Size of the nodes in the plot. Defaults to 300.
+        font_size (int, optional): Font size of the node labels. Defaults to 10.
+
+    Returns:
+        None
+    """
+    plt.figure(figsize=(10, 7))
+    pos = nx.spring_layout(G)  # Positions the nodes using the spring layout algorithm
+
+    # Draw nodes, edges, and labels
+    nx.draw(G, pos, with_labels=True, node_size=node_size, font_size=font_size, node_color='skyblue', edge_color='gray', font_weight='bold')
+
+    plt.title(title)
+    plt.show()
+
+
 
 def create_directed_graph(
     transition_matrix: np.ndarray, 
-    summary_by_cluster: Dict[int, str]
+    summary_by_cluster: Dict[int, str],
+    plot : bool = True 
 ) -> nx.DiGraph:
     """
     Creates a directed graph from a transition matrix and summaries by cluster.
@@ -63,54 +90,66 @@ def create_directed_graph(
     # Add edges with weights
     for i, from_intent in summary_by_cluster.items():
         for j, to_intent in summary_by_cluster.items():
-            # Add edge from from_intent to to_intent with weight from the transition matrix
             G.add_edge(from_intent, to_intent, weight=transition_matrix[int(i), int(j)])
-
+    
+    if plot : 
+        plot_networkx_graph(G)
     return G 
 
 
 
-import math
+
 import networkx as nx
 
-def add_transformed_weights(graph, weight_attribute='probability', transformed_attribute='weight'):
+def find_path(graph):
     """
-    Add transformed weights to the graph edges by taking negative logarithm of the given probability weights.
-
+    Finds the path of length n (number of nodes) with the highest score in a complete directed graph
+    represented as a NetworkX DiGraph.
+    
     Parameters:
-    graph (networkx.Graph): The input graph with probability weights.
-    weight_attribute (str): The edge attribute name for the probability weights.
-    transformed_attribute (str): The edge attribute name for the transformed weights.
-    """
-    for u, v, data in graph.edges(data=True):
-        prob = data.get(weight_attribute, 1)
-        if prob > 0:
-            data[transformed_attribute] = -math.log(prob)
-        else:
-            data[transformed_attribute] = float('inf')  # Handle zero probability edges
-
-def most_probable_path(graph, start, end):
-    """
-    Finds the most probable path from the start node to the end node in a graph where edges represent probabilities.
-
-    Parameters:
-    graph (networkx.Graph): The input graph with nodes and edges representing probabilities of transitions.
-    start (hashable): The starting node.
-    end (hashable): The ending node.
-
+    graph (nx.DiGraph): A NetworkX directed graph where each edge has a weight attribute.
+    
     Returns:
-    list: The most probable path from start to end node passing through all nodes, as a list of nodes. 
-          The list will be empty if such a path does not exist.
+    tuple: A tuple containing the highest score path and its score.
     """
-    add_transformed_weights(graph)
+    # Number of nodes in the graph
+    n = len(graph)
+    highest_score = -float('inf')
+    best_path = []
 
-    try:
-        # Compute the shortest path using the negative logarithm of the probabilities as weights
-        path = nx.shortest_path(graph, source=start, target=end, weight='weight')
-        return path
-    except nx.NetworkXNoPath:
-        # If no path is found, return an empty list
-        return []
+    # Iterate over each node as the starting point
+    for start_node in graph.nodes:
+        current_path = [start_node]
+        current_node = start_node
+        current_score = 0
+
+        # Find a path of length n
+        for _ in range(n - 1):
+            # Get all outgoing edges from the current node
+            neighbors = list(graph.successors(current_node))
+            
+            # Find the edge with the maximum weight
+            if not neighbors:
+                break
+            
+            next_node = max(neighbors, key=lambda neighbor: graph[current_node][neighbor]['weight'])
+            
+            # Add to the path and score
+            current_path.append(next_node)
+            current_score += graph[current_node][next_node]['weight']
+            
+            # Move to the next node
+            current_node = next_node
+
+        # If the path has the required length, check its score
+        if len(current_path) == n:
+            if current_score > highest_score:
+                highest_score = current_score
+                best_path = current_path
+
+    return best_path, highest_score
+
+
 
 # Example Usage
 if __name__ == "__main__":
@@ -122,5 +161,5 @@ if __name__ == "__main__":
     graph.add_edge('C', 'D', probability=0.5)
     start_node = 'A'
     end_node = 'D'
-    path = most_probable_path(graph, start_node, end_node)
+    path = find_path(graph, start_node, end_node)
     print(f"Most probable path: {path}")

@@ -4,7 +4,9 @@ import time
 import numpy as np 
 from typing import List, Tuple, Union , Any , Dict 
 import time
+from functools import lru_cache
 
+@lru_cache(maxsize=None)
 def get_embedding_with_retry_ollama(
     model: Any, 
     prompt: str, 
