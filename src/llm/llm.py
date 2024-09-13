@@ -2,8 +2,9 @@ from typing import List, Dict, Any
 from abc import ABC, abstractmethod
 from openai import AzureOpenAI
 from src.config.settings import get_settings
-import logging
-
+from src.logger.logger import get_logger
+import time
+logger = get_logger(__file__)
 settings = get_settings()
 
 
@@ -49,27 +50,47 @@ class LLM(ABC):
 class AzureDeployedGPT4oMiniLLM(LLM):
     def __init__(self, model_name: str):
         super().__init__(model_name)
-        self.client : AzureOpenAI = AzureOpenAI(
-            api_key=settings.GPT_4O_MINI_AZURE_API_KEY , 
-            base_url=settings.GPT_4O_MINI_AZURE_TARGET_URI , 
+        self.client: AzureOpenAI = AzureOpenAI(
+            api_key=settings.GPT_4O_MINI_AZURE_API_KEY,
+            base_url=settings.GPT_4O_MINI_AZURE_TARGET_URI,
             api_version=settings.GPT_4O_MINI_AZURE_API_VERSION
         )
-    
+
     def get_response(
-        self,
+        self, 
         messages: List[str], 
+        max_retries: int = 20, 
+        wait_time: int = 10
     ) -> str:
-        try : 
-            response = self.client.chat.completions.create(
-                messages= messages , 
-                model = self.model_name ,
-            )
-            return response.choices[0].message.content
-        except Exception as e : 
-            logging.error(f"Error occured in aget_response : {e}")
+        """
+        Get a response from the Azure OpenAI model, with retries on failure.
 
-
-
+        :param messages: List of message strings to send to the model.
+        :param max_retries: Maximum number of retries in case of an error.
+        :param wait_time: Number of seconds to wait before retrying.
+        :return: The content of the response message.
+        """
+        attempt = 0
+        while attempt < max_retries:
+            try:
+                response = self.client.chat.completions.create(
+                    messages=messages,
+                    model=self.model_name,
+                )
+                # Check if response and its content are not None
+                if response and response.choices and response.choices[0].message.content:
+                    return response.choices[0].message.content
+                else:
+                    raise ValueError("Received None or empty response from LLM.")
+            except Exception as e:
+                attempt += 1
+                logger.error(f"Error occurred in get_response attempt {attempt}: {e}")
+                if attempt < max_retries:
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error("Max retries reached. Unable to get a valid response.")
+                    raise e  # Raise the exception after exhausting retries
 class CollectionLLM : 
     llm_collection : Dict[str , LLM]= {
         'gpt-4o-mini' : AzureDeployedGPT4oMiniLLM(model_name="gpt-4o-mini")

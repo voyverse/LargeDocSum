@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 import numpy as np
 from tqdm import tqdm
 import networkx as nx
+import matplotlib.pyplot as plt
 
 def create_transition_matrix(
     processed_data: List[Dict[str, Any]], 
@@ -39,8 +40,7 @@ def create_transition_matrix(
     return transition_matrix
 
 
-import networkx as nx
-import matplotlib.pyplot as plt
+
 
 def plot_networkx_graph(G: nx.Graph, title: str = "NetworkX Graph", node_size: int = 300, font_size: int = 10) -> None:
     """
@@ -97,69 +97,63 @@ def create_directed_graph(
     return G 
 
 
-
-
-import networkx as nx
-
-def find_path(graph):
+def find_most_probable_sequence(T):
     """
-    Finds the path of length n (number of nodes) with the highest score in a complete directed graph
-    represented as a NetworkX DiGraph.
+    Finds the most probable Hamiltonian path in a Markov chain given the transition matrix T.
     
-    Parameters:
-    graph (nx.DiGraph): A NetworkX directed graph where each edge has a weight attribute.
+    Args:
+    - T (list of list of floats): The transition matrix where T[i][j] represents the probability of transitioning from node i to node j.
     
     Returns:
-    tuple: A tuple containing the highest score path and its score.
+    - max_prob (float): The maximum probability of the Hamiltonian path.
+    - path (list of int): The most probable path visiting all nodes.
     """
-    # Number of nodes in the graph
-    n = len(graph)
-    highest_score = -float('inf')
-    best_path = []
+    n = len(T)
+    dp = [[0 for _ in range(n)] for _ in range(2**n)]  # DP table to store maximum probabilities
+    parent = [[-1 for _ in range(n)] for _ in range(2**n)]  # Table to reconstruct the path
 
-    # Iterate over each node as the starting point
-    for start_node in graph.nodes:
-        current_path = [start_node]
-        current_node = start_node
-        current_score = 0
+    # Initialize base cases: starting from each node with probability 1
+    for i in range(n):
+        dp[1 << i][i] = 1  # Start at node i with probability 1
 
-        # Find a path of length n
-        for _ in range(n - 1):
-            # Get all outgoing edges from the current node
-            neighbors = list(graph.successors(current_node))
-            
-            # Find the edge with the maximum weight
-            if not neighbors:
-                break
-            
-            next_node = max(neighbors, key=lambda neighbor: graph[current_node][neighbor]['weight'])
-            
-            # Add to the path and score
-            current_path.append(next_node)
-            current_score += graph[current_node][next_node]['weight']
-            
-            # Move to the next node
-            current_node = next_node
+    # Fill the DP table
+    for S in range(1, 2**n):  # Iterate over all subsets of nodes
+        for i in range(n):  # Consider each possible ending node i
+            if not (S & (1 << i)):  # If i is not in subset S, skip
+                continue
+            for j in range(n):  # Consider transitions to node i
+                if i == j or not (S & (1 << j)):  # Skip if i == j or j is not in S
+                    continue
+                # Calculate maximum probability path ending at i
+                prob = dp[S - (1 << i)][j] * T[j][i]
+                if prob > dp[S][i]:
+                    dp[S][i] = prob
+                    parent[S][i] = j  # Keep track of the path
 
-        # If the path has the required length, check its score
-        if len(current_path) == n:
-            if current_score > highest_score:
-                highest_score = current_score
-                best_path = current_path
+    # Determine the maximum probability path
+    max_prob = 0
+    end_node = -1
+    for i in range(n):
+        if dp[(1 << n) - 1][i] > max_prob:
+            max_prob = dp[(1 << n) - 1][i]
+            end_node = i
 
-    return best_path, highest_score
+    # Reconstruct the most probable path
+    path = []
+    current_set = (1 << n) - 1
+    current_node = end_node
+
+    while current_node != -1:
+        path.append(current_node)
+        next_node = parent[current_set][current_node]
+        current_set = current_set - (1 << current_node)
+        current_node = next_node
+
+    path.reverse()  # Reverse to get the path from start to end
+
+    return path ,max_prob
 
 
 
-# Example Usage
-if __name__ == "__main__":
-    graph = nx.DiGraph()
-    graph.add_edge('A', 'B', probability=0.9)
-    graph.add_edge('B', 'C', probability=0.8)
-    graph.add_edge('A', 'C', probability=0.6)
-    graph.add_edge('C', 'A', probability=0.7)
-    graph.add_edge('C', 'D', probability=0.5)
-    start_node = 'A'
-    end_node = 'D'
-    path = find_path(graph, start_node, end_node)
-    print(f"Most probable path: {path}")
+
+

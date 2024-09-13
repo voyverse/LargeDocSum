@@ -13,3 +13,4 @@ scikit-learn==1.5.1
 pydantic-settings==2.4.0
 numpy== 1.26.4
 networkx==3.3
+uvicorn== 0.30.6

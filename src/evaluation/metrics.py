@@ -3,6 +3,9 @@ import textdescriptives as td
 import evaluate
 import bert_score
 
+rouge = evaluate.load('rouge')
+nlp = spacy.load("en_core_web_lg")
+nlp.add_pipe("textdescriptives/coherence")
 def calculate_rouge_scores(candidates, references):
     """
     Calculate ROUGE scores for given candidates and references.
@@ -14,9 +17,12 @@ def calculate_rouge_scores(candidates, references):
     Returns:
         dict: ROUGE scores including ROUGE-1, ROUGE-2, ROUGE-L.
     """
-    rouge = evaluate.load('rouge')
+   
     results = rouge.compute(predictions=candidates, references=references)
-    return results
+    refined_results = {}
+    for rouge_k , score  in results.items() : 
+        refined_results[rouge_k] = 100 * score
+    return refined_results
 
 def calculate_bertscore(candidates, references):
     """
@@ -60,8 +66,7 @@ def calculate_coherence(text):
     Returns:
         dict: Coherence scores including first-order and second-order coherence.
     """
-    nlp = spacy.load("en_core_web_lg")
-    nlp.add_pipe("textdescriptives/coherence")
+
 
     doc = nlp(text)
     coherence = doc._.coherence

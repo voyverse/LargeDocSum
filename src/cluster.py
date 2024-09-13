@@ -3,41 +3,59 @@ import numpy as np
 from sklearn.cluster import KMeans
 from openai import OpenAI
 import json
-import logging
+from src.logger.logger import get_logger 
 from typing import Dict, List
 from src.llm.llm import CollectionLLM
+from sklearn.metrics import silhouette_score
 
+logger = get_logger(__file__)
 def cluster_chunks_kmeans(
     vdb: List[Dict[str, Any]], 
-    num_clusters: int
-) -> Tuple[List[Dict[str, Any]], np.ndarray]:
+    cluster_range: Tuple[int, int] = (5, 10)
+) -> Tuple[List[Dict[str, Any]], np.ndarray, int]:
     """
-    Clusters the embeddings using k-means++ and returns the clustered results with centroids.
+    Finds the best number of clusters using silhouette score and clusters the embeddings using k-means++.
 
     Args:
         vdb (List[Dict[str, Any]]): A list of dictionaries where each dictionary contains:
             - "pos" (int): The chronological position of the chunk.
             - "chunk" (str): The chunk itself.
             - "embedding" (np.ndarray): The embedding of the chunk.
-        num_clusters (int): The number of clusters to form.
+        cluster_range (Tuple[int, int], optional): The range of cluster numbers to evaluate. Defaults to (5, 10).
 
     Returns:
-        Tuple[List[Dict[str, Any]], np.ndarray]: 
+        Tuple[List[Dict[str, Any]], np.ndarray, int]: 
             - List[Dict[str, Any]]: A list of dictionaries where each dictionary contains:
                 - "cluster" (int): The cluster label assigned by k-means.
                 - "chunk" (str): The chunk itself.
                 - "embedding" (np.ndarray): The embedding of the chunk.
                 - "pos" (int): The chronological position of the chunk.
             - np.ndarray: An array of cluster centroids.
+            - int: The optimal number of clusters.
     """
     # Extract embeddings from the provided dictionary list
     embeddings = np.array([d["embedding"] for d in vdb])
 
-    # Perform k-means++ clustering
-    kmeans = KMeans(n_clusters=num_clusters, init='k-means++', random_state=42)
-    kmeans.fit(embeddings)
-    cluster_labels = kmeans.labels_
-    cluster_centroids = kmeans.cluster_centers_
+    best_num_clusters = cluster_range[0]
+    best_score = -1
+    best_kmeans = None
+
+    # Find the best number of clusters using silhouette score
+    for num_clusters in range(cluster_range[0], cluster_range[1] + 1):
+        kmeans = KMeans(n_clusters=num_clusters, init='k-means++', random_state=42)
+        kmeans.fit(embeddings)
+        cluster_labels = kmeans.labels_
+        score = silhouette_score(embeddings, cluster_labels)
+
+        if score > best_score:
+            best_score = score
+            best_num_clusters = num_clusters
+            best_kmeans = kmeans
+
+    # Using the best number of clusters to fit the final k-means model
+    best_kmeans.fit(embeddings)
+    cluster_labels = best_kmeans.labels_
+    cluster_centroids = best_kmeans.cluster_centers_
 
     # Create a list of dictionaries with cluster information
     clustered_chunks = [
@@ -50,8 +68,7 @@ def cluster_chunks_kmeans(
         for i, data_point in enumerate(vdb)
     ]
 
-    return clustered_chunks, cluster_centroids
-
+    return clustered_chunks, cluster_centroids, best_num_clusters
 
 
 
@@ -117,7 +134,7 @@ def aggregate_summaries_for_each_cluster(
     try : 
         llm = CollectionLLM.llm_collection[model]
     except Exception as e : 
-        logging.error(f"model {model} is not included into our llm collection. {e}")
+        logger.error(f"model {model} is not included into our llm collection. {e}")
     aggregated_messages = [{"role": "system", "content": sys_prompt_content}]
     cluster_summaries = {}
 
@@ -135,7 +152,7 @@ def aggregate_summaries_for_each_cluster(
         try:
             summary_text = summary["summary"]
         except Exception as e:
-            logging.error(f"error occurred in aggragate_summary_for_each_cluster: {e}")
+            logger.error(f"error occurred in aggragate_summary_for_each_cluster: {e}")
             summary_text = str(summary)
 
         cluster_summaries[cluster_index] = summary_text
@@ -143,27 +160,58 @@ def aggregate_summaries_for_each_cluster(
 
     return cluster_summaries
 
+import json
+import logging
+import re
+from typing import Dict, Union
+
+logger = logging.getLogger(__name__)
+
 def preprocess_llm_response(llm_message: str) -> Dict[str, Union[str, Dict]]:
     """
     Preprocess the function calling message to remove any unwanted strings,
     ensuring only the JSON part remains for parsing.
 
     Args:
-        function_calling_message (str): The raw message containing the function call.
+        llm_message (str): The raw message containing the function call.
 
     Returns:
-        Dict[str, Union[str, Dict]]: The cleaned dictionary representing the function call, or an empty dict if parsing fails.
+        Dict[str, Union[str, Dict]]: The cleaned dictionary representing the function call, or the original message if parsing fails.
     """
+    # Finding the boundaries of the JSON string
     start_idx = llm_message.find('{')
     end_idx = llm_message.rfind('}')
-    llm_message = llm_message.replace("'" , '"')
-    try : 
+    
+    # Replace single quotes with double quotes to ensure valid JSON
+    llm_message = llm_message.replace("'", '"')
+    
+    try:
+        # Ensure we have a valid substring to parse
         if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
             json_str = llm_message[start_idx:end_idx + 1]
+            
+            # Use a regular expression to clean and validate JSON
+            json_str = re.sub(r'(?<!\\)\'', '"', json_str)  # Replace unescaped single quotes with double quotes
+            json_str = re.sub(r'\s+', ' ', json_str).strip()  # Remove extra whitespace
+
+            # Attempt to parse the JSON
             func_call = json.loads(json_str)
             return func_call
-    except Exception as e : 
-        logging.error(f"Error occured in preprocess_llm_response : {e}")
-        print(f"llm response : {llm_message}")
-        return llm_message
+        else:
+            logger.error("Invalid JSON structure: missing curly braces or improperly formatted.")
+            print(f"Invalid JSON format in llm response: {llm_message}")
+            return {'error': 'Invalid JSON structure'}
+    
+    except json.JSONDecodeError as e:
+        # Log the error with specific details
+        logger.error(f"JSON decoding error occurred in preprocess_llm_response: {e}")
+        logger.error(f"Failed JSON string: {json_str}")
+        print(f"JSON decoding error in llm response: {llm_message}")
+        return {'error': 'JSON decoding error', 'message': llm_message}
+
+    except Exception as e:
+        # Log the general error with details
+        logger.error(f"Unexpected error occurred in preprocess_llm_response: {e}")
+        print(f"Unexpected error with llm response: {llm_message}")
+        return {'error': 'Unexpected error', 'message': llm_message}
 
