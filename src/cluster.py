@@ -9,9 +9,14 @@ from src.llm.llm import CollectionLLM
 from sklearn.metrics import silhouette_score
 
 logger = get_logger(__file__)
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from typing import List, Dict, Any, Tuple
+
 def cluster_chunks_kmeans(
     vdb: List[Dict[str, Any]], 
-    cluster_range: Tuple[int, int] = (5, 10)
+    cluster_range: Tuple[int, int] = (5, 30)
 ) -> Tuple[List[Dict[str, Any]], np.ndarray, int]:
     """
     Finds the best number of clusters using silhouette score and clusters the embeddings using k-means++.
@@ -35,22 +40,45 @@ def cluster_chunks_kmeans(
     """
     # Extract embeddings from the provided dictionary list
     embeddings = np.array([d["embedding"] for d in vdb])
+    n_samples = embeddings.shape[0]
 
-    best_num_clusters = cluster_range[0]
+    if n_samples < 2:
+        raise ValueError(f"Number of samples ({n_samples}) is too small for clustering.")
+
+    # Adjust cluster_range based on n_samples
+    min_clusters = max(2, cluster_range[0])
+    max_clusters = min(cluster_range[1], n_samples - 1)
+
+    if min_clusters > max_clusters:
+        min_clusters = max(2, min_clusters)
+        max_clusters = min_clusters  # Set max_clusters to min_clusters to have only one possible cluster
+
+    print(f"Clustering with number of clusters ranging from {min_clusters} to {max_clusters} based on n_samples={n_samples}.")
+
+    best_num_clusters = min_clusters
     best_score = -1
     best_kmeans = None
 
     # Find the best number of clusters using silhouette score
-    for num_clusters in range(cluster_range[0], cluster_range[1] + 1):
+    for num_clusters in range(min_clusters, max_clusters + 1):
         kmeans = KMeans(n_clusters=num_clusters, init='k-means++', random_state=42)
         kmeans.fit(embeddings)
         cluster_labels = kmeans.labels_
-        score = silhouette_score(embeddings, cluster_labels)
+        
+        try:
+            score = silhouette_score(embeddings, cluster_labels)
+            print(f"Number of clusters: {num_clusters}, Silhouette Score: {score:.4f}")
+        except ValueError as ve:
+            print(f"Skipping {num_clusters} clusters due to error: {ve}")
+            continue
 
         if score > best_score:
             best_score = score
             best_num_clusters = num_clusters
             best_kmeans = kmeans
+
+    if best_kmeans is None:
+        raise ValueError("Failed to find a suitable number of clusters.")
 
     # Using the best number of clusters to fit the final k-means model
     best_kmeans.fit(embeddings)
@@ -60,13 +88,15 @@ def cluster_chunks_kmeans(
     # Create a list of dictionaries with cluster information
     clustered_chunks = [
         {
-            "cluster": cluster_labels[i],
+            "cluster": int(cluster_labels[i]),
             "chunk": data_point["chunk"],
             "embedding": data_point["embedding"],
             "pos": data_point["pos"]
         }
         for i, data_point in enumerate(vdb)
     ]
+
+    print(f"Optimal number of clusters: {best_num_clusters} with Silhouette Score: {best_score:.4f}")
 
     return clustered_chunks, cluster_centroids, best_num_clusters
 

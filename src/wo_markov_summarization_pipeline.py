@@ -6,7 +6,7 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
-
+import random
 from src.indexing import *
 from src.cluster import *
 from src.markov_sum import *
@@ -128,11 +128,9 @@ def pipeline(
     if log:
         logger.info("Transition matrix and directed graph created")
 
-    # Determine the most probable path
-
-    path , max_prob  = find_most_probable_sequence(transition_matrix)
+    path = list(range(num_clusters))
     if log:
-        print(f"Most probable path identified -> path : {path}")
+        print(f"Path identified wo MarkovChain -> path : {path}")
 
     # Prepare messages for the final summary call
     messages = [{'role': 'system', 'content': system_prompt_docsummary}]
@@ -176,6 +174,7 @@ def pipeline(
         logger.info("Pipeline completed")
 
     return results
+
 
 
 

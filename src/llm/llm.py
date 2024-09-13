@@ -4,6 +4,7 @@ from openai import AzureOpenAI
 from src.config.settings import get_settings
 from src.logger.logger import get_logger
 import time
+import json 
 logger = get_logger(__file__)
 settings = get_settings()
 
@@ -59,7 +60,7 @@ class AzureDeployedGPT4oMiniLLM(LLM):
     def get_response(
         self, 
         messages: List[str], 
-        max_retries: int = 20, 
+        max_retries: int = 10, 
         wait_time: int = 10
     ) -> str:
         """
@@ -71,6 +72,7 @@ class AzureDeployedGPT4oMiniLLM(LLM):
         :return: The content of the response message.
         """
         attempt = 0
+        #logger.debug(f"Messages are : {json.dumps(messages , indent=4)}")
         while attempt < max_retries:
             try:
                 response = self.client.chat.completions.create(
@@ -90,7 +92,7 @@ class AzureDeployedGPT4oMiniLLM(LLM):
                     time.sleep(wait_time)
                 else:
                     logger.error("Max retries reached. Unable to get a valid response.")
-                    raise e  # Raise the exception after exhausting retries
+                    return None 
 class CollectionLLM : 
     llm_collection : Dict[str , LLM]= {
         'gpt-4o-mini' : AzureDeployedGPT4oMiniLLM(model_name="gpt-4o-mini")
