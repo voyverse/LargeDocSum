@@ -131,6 +131,8 @@ def pipeline(
     # Determine the most probable path
 
     path , max_prob  = find_most_probable_sequence(transition_matrix)
+    if not len(path) : 
+        path = list(range(num_clusters))
     if log:
         print(f"Most probable path identified -> path : {path}")
 

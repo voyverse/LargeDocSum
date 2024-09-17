@@ -16,7 +16,7 @@ from typing import List, Dict, Any, Tuple
 
 def cluster_chunks_kmeans(
     vdb: List[Dict[str, Any]], 
-    cluster_range: Tuple[int, int] = (5, 30)
+    cluster_range: Tuple[int, int] = (5, 10)
 ) -> Tuple[List[Dict[str, Any]], np.ndarray, int]:
     """
     Finds the best number of clusters using silhouette score and clusters the embeddings using k-means++.
