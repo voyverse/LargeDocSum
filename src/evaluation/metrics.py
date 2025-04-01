@@ -10,7 +10,7 @@ nlp.add_pipe("textdescriptives/coherence")
 checkpoint = "third_party/bleurt/BLEURT-20"
 scorer = score.BleurtScorer(checkpoint)
 
-def calculate_blue_scores(candidates : List[str], references : List[str]) -> List[float]:
+def calculate_blue_rt_scores(candidates : List[str], references : List[str]) -> List[float]:
     """
     Calculate BLEU scores for given candidates and references.
 

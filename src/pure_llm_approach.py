@@ -74,12 +74,16 @@ def pipeline(
         logger.info("Calculating coherence scores")
     coherence_results = calculate_coherence(overall_summary)
 
+    if log:
+        logger.info("Calculating Blue Rt scores")
+    blue_rt_scores = calculate_blue_rt_scores([overall_summary], [reference_summary])
+    
     results = {
         'summary': overall_summary,
-        'number clusters' : None , 
         'rouge': rouge_results,
         'bertscore': bert_results,
-        'coherence': coherence_results
+        'coherence': coherence_results,
+        'blue_rt': blue_rt_scores
     }
 
     if log:
