@@ -1,5 +1,5 @@
 evaluate==0.4.2
-spacy==3.7.6
+spacy<=3.7.6
 textdescriptives==2.8.2
 bert-score==0.3.13
 #python -m spacy download en_core_web_lg 
