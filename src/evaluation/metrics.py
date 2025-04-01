@@ -2,10 +2,27 @@ import spacy
 import textdescriptives as td
 import evaluate
 import bert_score
-
+from third_party.bleurt.bleurt import score
+from typing import List 
 rouge = evaluate.load('rouge')
 nlp = spacy.load("en_core_web_lg")
 nlp.add_pipe("textdescriptives/coherence")
+checkpoint = "third_party/bleurt/BLEURT-20"
+scorer = score.BleurtScorer(checkpoint)
+
+def calculate_blue_scores(candidates : List[str], references : List[str]) -> List[float]:
+    """
+    Calculate BLEU scores for given candidates and references.
+
+    Args:
+        candidates (List[str]): list of candidate summaries.
+        references (List[str]): list of reference summaries.
+    Returns:
+        List[float]: BLEU scores for each candidate.
+    """
+    scores = scorer.score(references=references, candidates=candidates)
+    return scores
+
 def calculate_rouge_scores(candidates, references):
     """
     Calculate ROUGE scores for given candidates and references.
